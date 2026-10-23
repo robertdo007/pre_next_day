@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dự Đoán Malum - BTC Pattern Statistical Analyzer</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            dark: '#0B0E14',
+                            card: '#151921',
+                            border: '#2A303C',
+                            green: '#00E676',
+                            red: '#FF5252',
+                            accent: '#6366F1'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- PapaParse for CSV parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        body {
+            background-color: #0B0E14;
+            color: #E2E8F0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #151921;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2A303C;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4B5563;
+        }
+        .neon-glow-green {
+            box-shadow: 0 0 15px rgba(0, 230, 118, 0.25);
+        }
+        .neon-glow-red {
+            box-shadow: 0 0 15px rgba(255, 82, 82, 0.25);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Header Navigation -->
+    <header class="bg-brand-card border-b border-brand-border px-4 lg:px-8 py-4 sticky top-0 z-50 shadow-md">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-xl text-white shadow-lg">
+                    M
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                        Dự Đoán Malum <span class="text-xs bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded-full">BTC 1H Engine</span>
+                    </h1>
+                    <p class="text-xs text-gray-400">Statistical Pattern Predictor & Next Candle Analyzer</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-3 text-xs">
+                <span id="dataStatusBadge" class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-lg flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span id="dataStatusText">Sample BTC Data Active (1,000 candles)</span>
+                </span>
+                <a href="https://malum.icu" target="_blank" class="bg-brand-border hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 font-medium">
+                    <i class="fa-solid font-bold text-indigo-400 fa-globe"></i> malum.icu
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-8 space-y-6">
+
+        <!-- Top Control Panel: Pattern Input & File Upload -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Pattern Input Card -->
+            <div class="lg:col-span-2 bg-brand-card border border-brand-border rounded-2xl p-5 lg:p-6 shadow-xl flex flex-col justify-between">
+                <div>
+                    <div class="flex justify-between items-center mb-3">
+                        <label class="block text-sm font-semibold text-gray-200 uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-magnifying-glass text-indigo-400"></i> Enter Pattern Sequence
+                        </label>
+                        <span class="text-xs text-gray-400">Case-insensitive (Space or comma separated)</span>
+                    </div>
+
+                    <div class="relative mb-4">
+                        <input type="text" id="patternInput" value="up up down up" 
+                            placeholder="e.g. up up down up OR up, down, up" 
+                            class="w-full bg-brand-dark border-2 border-brand-border focus:border-indigo-500 rounded-xl py-3 px-4 text-white placeholder-gray-500 text-lg font-mono tracking-wide focus:outline-none transition-all uppercase">
+                        <button id="searchBtn" class="absolute right-2 top-2 bottom-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-5 rounded-lg transition-all flex items-center gap-2">
+                            <i class="fa-solid fa-chart-line"></i> Analyze
+                        </button>
+                    </div>
+
+                    <!-- Quick Preset Buttons -->
+                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                        <span class="text-xs text-gray-400 mr-1">Presets:</span>
+                        <button class="preset-btn text-xs bg-brand-dark hover:bg-brand-border border border-brand-border px-3 py-1.5 rounded-lg text-gray-300 font-mono transition-all" data-pattern="up up down up">UP UP DOWN UP</button>
+                        <button class="preset-btn text-xs bg-brand-dark hover:bg-brand-border border border-brand-border px-3 py-1.5 rounded-lg text-gray-300 font-mono transition-all" data-pattern="down down up down">DOWN DOWN UP DOWN</button>
+                        <button class="preset-btn text-xs bg-brand-dark hover:bg-brand-border border border-brand-border px-3 py-1.5 rounded-lg text-gray-300 font-mono transition-all" data-pattern="up up up">3x UP (Streak)</button>
+                        <button class="preset-btn text-xs bg-brand-dark hover:bg-brand-border border border-brand-border px-3 py-1.5 rounded-lg text-gray-300 font-mono transition-all" data-pattern="down down down">3x DOWN (Streak)</button>
+                    </div>
+                </div>
+
+                <!-- Parsed Pattern Chips Display -->
+                <div class="mt-4 pt-4 border-t border-brand-border/50 flex items-center gap-2">
+                    <span class="text-xs text-gray-400">Target Sequence:</span>
+                    <div id="patternChips" class="flex flex-wrap gap-1.5">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- CSV Upload Dropzone -->
+            <div class="bg-brand-card border border-brand-border rounded-2xl p-5 lg:p-6 shadow-xl flex flex-col justify-between">
+                <div>
+                    <h3 class="text-sm font-semibold text-gray-200 uppercase tracking-wider mb-2 flex items-center justify-between">
+                        <span><i class="fa-solid fa-file-csv text-emerald-400 mr-2"></i> Custom CSV File</span>
+                        <span class="text-xs text-gray-400 font-normal">btc_1h_analysis.csv</span>
+                    </h3>
+                    
+                    <div id="dropzone" class="border-2 border-dashed border-brand-border hover:border-indigo-500/70 rounded-xl p-4 text-center cursor-pointer transition-all bg-brand-dark/50 hover:bg-brand-dark flex flex-col items-center justify-center min-h-[110px]">
+                        <i class="fa-solid fa-cloud-arrow-up text-2xl text-gray-400 mb-2"></i>
+                        <p class="text-xs text-gray-300 font-medium">Drag & drop your CSV file here or <span class="text-indigo-400 underline">browse</span></p>
+                        <p class="text-[10px] text-gray-500 mt-1">Expected columns: date, close, change, change_percent, direction</p>
+                        <input type="file" id="csvFileInput" accept=".csv" class="hidden">
+                    </div>
+                </div>
+
+                <div class="mt-3 flex justify-between items-center text-xs text-gray-400">
+                    <button id="resetDataBtn" class="hover:text-gray-200 transition-all flex items-center gap-1">
+                        <i class="fa-solid fa-rotate-left"></i> Reload Built-in Dataset
+                    </button>
+                    <span id="rowCount" class="font-mono text-indigo-400">1,000 candles</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analytical Dashboard Stats Cards -->
+        <div id="statsSection" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            <!-- Occurrence Matches -->
+            <div class="bg-brand-card border border-brand-border rounded-xl p-5 shadow-lg relative overflow-hidden">
+                <div class="absolute -right-2 -bottom-2 text-brand-border/40 text-6xl font-bold select-none">#</div>
+                <div class="text-xs text-gray-400 uppercase font-semibold">Matched Occurrences</div>
+                <div class="text-3xl font-extrabold text-white my-2 font-mono" id="statOccurrences">0</div>
+                <div class="text-xs text-gray-400" id="statSampleRatio">0% of total dataset</div>
+            </div>
+
+            <!-- Next Candle Probability (+1) -->
+            <div class="bg-brand-card border border-brand-border rounded-xl p-5 shadow-lg relative overflow-hidden">
+                <div class="text-xs text-gray-400 uppercase font-semibold flex justify-between">
+                    <span>Next Candle (+1) Direction</span>
+                    <span class="text-indigo-400 font-mono" id="statWinRatePercent">0%</span>
+                </div>
+                <div class="mt-3 space-y-1.5">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-brand-green font-medium">UP: <span id="statUpPercent">0%</span></span>
+                        <span class="text-brand-red font-medium">DOWN: <span id="statDownPercent">0%</span></span>
+                    </div>
+                    <!-- Progress bar -->
+                    <div class="h-2.5 w-full bg-brand-dark rounded-full overflow-hidden flex">
+                        <div id="barUp" class="bg-brand-green h-full transition-all" style="width: 50%"></div>
+                        <div id="barFlat" class="bg-gray-500 h-full transition-all" style="width: 0%"></div>
+                        <div id="barDown" class="bg-brand-red h-full transition-all" style="width: 50%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Average % Return Next Candle -->
+            <div class="bg-brand-card border border-brand-border rounded-xl p-5 shadow-lg relative overflow-hidden">
+                <div class="text-xs text-gray-400 uppercase font-semibold">Avg % Return (Step +1)</div>
+                <div class="text-3xl font-extrabold my-2 font-mono" id="statAvgReturn">+0.00%</div>
+                <div class="text-xs text-gray-400 flex justify-between">
+                    <span>Expectancy per trade</span>
+                    <span id="statExpectancy" class="font-mono text-gray-300">+0.00%</span>
+                </div>
+            </div>
+
+            <!-- Max Gain / Drawdown -->
+            <div class="bg-brand-card border border-brand-border rounded-xl p-5 shadow-lg relative overflow-hidden">
+                <div class="text-xs text-gray-400 uppercase font-semibold">Extreme Next Movements</div>
+                <div class="mt-2 space-y-1">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-gray-400">Max Gain (+1):</span>
+                        <span class="text-sm font-bold font-mono text-brand-green" id="statMaxGain">+0.00%</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-gray-400">Max Loss (+1):</span>
+                        <span class="text-sm font-bold font-mono text-brand-red" id="statMaxLoss">-0.00%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts and Detailed Multi-Step Breakdown -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Pie/Bar Probability Distribution Chart -->
+            <div class="bg-brand-card border border-brand-border rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+                <div>
+                    <h3 class="text-sm font-semibold text-gray-200 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-pie text-indigo-400"></i> Next Candle Direction Distribution
+                    </h3>
+                    <div class="relative h-56 w-full flex items-center justify-center">
+                        <canvas id="probabilityChart"></canvas>
+                    </div>
+                </div>
+                <div class="mt-4 pt-3 border-t border-brand-border/50 text-center text-xs text-gray-400" id="chartLegendText">
+                    Based on historical pattern occurrences
+                </div>
+            </div>
+
+            <!-- Multi-Step Forecast (+1, +2, +3 Candles ahead) -->
+            <div class="lg:col-span-2 bg-brand-card border border-brand-border rounded-2xl p-5 shadow-xl">
+                <h3 class="text-sm font-semibold text-gray-200 uppercase tracking-wider mb-4 flex items-center justify-between">
+                    <span><i class="fa-solid fa-layer-group text-indigo-400 mr-2"></i> Forward Multi-Step Prediction (+1, +2, +3 Steps)</span>
+                    <span class="text-xs font-normal text-gray-400">Sequential Probabilities</span>
+                </h3>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <!-- +1 Step -->
+                    <div class="bg-brand-dark p-4 rounded-xl border border-brand-border/60">
+                        <div class="text-xs font-bold text-indigo-400 mb-2 uppercase">Step +1 Candle</div>
+                        <div class="text-2xl font-bold font-mono mb-2" id="step1Dominant">--</div>
+                        <div class="space-y-1 text-xs">
+                            <div class="flex justify-between"><span class="text-gray-400">UP:</span> <span id="step1Up" class="font-mono text-brand-green">0%</span></div>
+                            <div class="flex justify-between"><span class="text-gray-400">DOWN:</span> <span id="step1Down" class="font-mono text-brand-red">0%</span></div>
+                            <div class="flex justify-between"><span class="text-gray-400">Avg Return:</span> <span id="step1Return" class="font-mono text-gray-200">0%</span></div>
+                        </div>
+                    </div>
+
+                    <!-- +2 Step -->
+                    <div class="bg-brand-dark p-4 rounded-xl border border-brand-border/60">
+                        <div class="text-xs font-bold text-indigo-400 mb-2 uppercase">Step +2 Candles</div>
+                        <div class="text-2xl font-bold font-mono mb-2" id="step2Dominant">--</div>
+                        <div class="space-y-1 text-xs">
+                            <div class="flex justify-between"><span class="text-gray-400">UP:</span> <span id="step2Up" class="font-mono text-brand-green">0%</span></div>
+                            <div class="flex justify-between"><span class="text-gray-400">DOWN:</span> <span id="step2Down" class="font-mono text-brand-red">0%</span></div>
+                            <div class="flex justify-between"><span class="text-gray-400">Avg Return:</span> <span id="step2Return" class="font-mono text-gray-200">0%</span></div>
+                        </div>
+                    </div>
+
+                    <!-- +3 Step -->
+                    <div class="bg-brand-dark p-4 rounded-xl border border-brand-border/60">
+                        <div class="text-xs font-bold text-indigo-400 mb-2 uppercase">Step +3 Candles</div>
+                        <div class="text-2xl font-bold font-mono mb-2" id="step3Dominant">--</div>
+                        <div class="space-y-1 text-xs">
+                            <div class="flex justify-between"><span class="text-gray-400">UP:</span> <span id="step3Up" class="font-mono text-brand-green">0%</span></div>
+                            <div class="flex justify-between"><span class="text-gray-400">DOWN:</span> <span id="step3Down" class="font-mono text-brand-red">0%</span></div>
+                            <div class="flex justify-between"><span class="text-gray-400">Avg Return:</span> <span id="step3Return" class="font-mono text-gray-200">0%</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Explanation Banner -->
+                <div class="mt-4 p-3 bg-indigo-950/30 border border-indigo-500/20 rounded-xl flex items-start gap-3">
+                    <i class="fa-solid fa-circle-info text-indigo-400 mt-0.5"></i>
+                    <p class="text-xs text-indigo-200/80 leading-relaxed">
+                        This model scans historical hourly candles for the pattern sequence and calculates conditional probabilities for subsequent price action. High confidence setups typically show a strong directional skew (>60%) with positive average return.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Occurrence Details Table -->
+        <div class="bg-brand-card border border-brand-border rounded-2xl p-5 shadow-xl">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                <div>
+                    <h3 class="text-sm font-semibold text-gray-200 uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-list-check text-indigo-400"></i> Pattern Match History & Next Candle Outcomes
+                    </h3>
+                    <p class="text-xs text-gray-400 mt-0.5">Every historical occurrence where the target pattern completed</p>
+                </div>
+
+                <!-- Table Controls -->
+                <div class="flex items-center gap-3 w-full sm:w-auto">
+                    <select id="filterDirection" class="bg-brand-dark border border-brand-border rounded-lg text-xs text-gray-300 py-1.5 px-3 focus:outline-none focus:border-indigo-500">
+                        <option value="ALL">All Outcomes</option>
+                        <option value="UP">Next Candle UP only</option>
+                        <option value="DOWN">Next Candle DOWN only</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="overflow-x-auto rounded-xl border border-brand-border">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-brand-dark text-[11px] uppercase tracking-wider text-gray-400 border-b border-brand-border font-semibold">
+                            <th class="py-3 px-4">#</th>
+                            <th class="py-3 px-4">Pattern End Date</th>
+                            <th class="py-3 px-4">Matched Sequence</th>
+                            <th class="py-3 px-4">Close Price</th>
+                            <th class="py-3 px-4">Next (+1) Dir</th>
+                            <th class="py-3 px-4">Next Change %</th>
+                            <th class="py-3 px-4">Next Close Price</th>
+                        </tr>
+                    </thead>
+                    <tbody id="occurrencesTableBody" class="divide-y divide-brand-border/40 text-xs font-mono">
+                        <!-- Rendered by JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Controls -->
+            <div class="flex flex-col sm:flex-row justify-between items-center mt-4 gap-3 text-xs text-gray-400">
+                <div id="paginationInfo">Showing 0 to 0 of 0 entries</div>
+                <div class="flex items-center gap-2">
+                    <button id="prevPageBtn" class="bg-brand-dark hover:bg-brand-border border border-brand-border px-3 py-1.5 rounded-lg disabled:opacity-50 transition-all">
+                        <i class="fa-solid fa-chevron-left"></i> Previous
+                    </button>
+                    <span id="currentPageNum" class="font-bold text-gray-200 px-2">1</span>
+                    <button id="nextPageBtn" class="bg-brand-dark hover:bg-brand-border border border-brand-border px-3 py-1.5 rounded-lg disabled:opacity-50 transition-all">
+                        Next <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-brand-card border-t border-brand-border py-4 px-4 text-center text-xs text-gray-500 mt-auto">
+        Dự Đoán Malum Engine &bull; Automated BTC Pattern Statistics & Predictions &bull; <a href="https://malum.icu" class="text-indigo-400 hover:underline">malum.icu</a>
+    </footer>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // Global State
+        let dataset = [];
+        let currentMatches = [];
+        let filteredMatches = [];
+        let currentPage = 1;
+        const pageSize = 15;
+        let probabilityChartInstance = null;
+
+        // Initialize Application
+        window.addEventListener('DOMContentLoaded', () => {
+            generateSampleBTCData();
+            setupEventListeners();
+            parseAndAnalyzePattern();
+        });
+
+        // 1. Synthetic Sample Data Generator (Emulates btc_1h_analysis.csv schema)
+        function generateSampleBTCData() {
+            dataset = [];
+            const startDate = new Date(2026, 0, 1, 0, 0, 0); // Jan 1, 2026
+            let currentClose = 68500.0;
+
+            for (let i = 0; i < 1200; i++) {
+                const dateObj = new Date(startDate.getTime() + i * 3600 * 1000);
+                const dateStr = dateObj.toISOString().replace('T', ' ').substring(0, 19);
+
+                // Random walk return
+                const changePct = parseFloat(((Math.random() - 0.495) * 1.8).toFixed(2));
+                const priceChange = parseFloat((currentClose * (changePct / 100)).toFixed(2));
+                const nextClose = parseFloat((currentClose + priceChange).toFixed(2));
+
+                let direction = 'FLAT';
+                if (changePct > 0.05) direction = 'UP';
+                else if (changePct < -0.05) direction = 'DOWN';
+
+                dataset.push({
+                    index: i,
+                    date: dateStr,
+                    close: currentClose,
+                    change: priceChange,
+                    change_percent: changePct,
+                    direction: direction
+                });
+
+                currentClose = nextClose;
+            }
+
+            document.getElementById('rowCount').textContent = `${dataset.length.toLocaleString()} candles`;
+            document.getElementById('dataStatusText').textContent = `Sample BTC Data Active (${dataset.length.toLocaleString()} candles)`;
+        }
+
+        // 2. Event Listeners Setup
+        function setupEventListeners() {
+            // Search button and input typing
+            document.getElementById('searchBtn').addEventListener('click', parseAndAnalyzePattern);
+            document.getElementById('patternInput').addEventListener('keyup', (e) => {
+                if (e.key === 'Enter') parseAndAnalyzePattern();
+            });
+
+            // Preset Pattern Buttons
+            document.querySelectorAll('.preset-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.getElementById('patternInput').value = e.target.getAttribute('data-pattern');
+                    parseAndAnalyzePattern();
+                });
+            });
+
+            // File Upload / Drag-and-Drop
+            const dropzone = document.getElementById('dropzone');
+            const csvInput = document.getElementById('csvFileInput');
+
+            dropzone.addEventListener('click', () => csvInput.click());
+            dropzone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropzone.classList.add('border-indigo-500', 'bg-brand-dark');
+            });
+            dropzone.addEventListener('dragleave', () => {
+                dropzone.classList.remove('border-indigo-500', 'bg-brand-dark');
+            });
+            dropzone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropzone.classList.remove('border-indigo-500', 'bg-brand-dark');
+                if (e.dataTransfer.files.length) {
+                    handleCSVFile(e.dataTransfer.files[0]);
+                }
+            });
+
+            csvInput.addEventListener('change', (e) => {
+                if (e.target.files.length) {
+                    handleCSVFile(e.target.files[0]);
+                }
+            });
+
+            document.getElementById('resetDataBtn').addEventListener('click', () => {
+                generateSampleBTCData();
+                parseAndAnalyzePattern();
+            });
+
+            // Table Filter & Pagination
+            document.getElementById('filterDirection').addEventListener('change', filterAndRenderTable);
+            document.getElementById('prevPageBtn').addEventListener('click', () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    renderTable();
+                }
+            });
+            document.getElementById('nextPageBtn').addEventListener('click', () => {
+                const maxPage = Math.ceil(filteredMatches.length / pageSize);
+                if (currentPage < maxPage) {
+                    currentPage++;
+                    renderTable();
+                }
+            });
+        }
+
+        // 3. Handle CSV File Upload with PapaParse
+        function handleCSVFile(file) {
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    if (results.data && results.data.length > 0) {
+                        dataset = [];
+                        results.data.forEach((row, idx) => {
+                            // Standardize column keys
+                            const date = row.date || row.Date || row.time || row.Timestamp || `Row ${idx}`;
+                            const close = parseFloat(row.close || row.Close || 0);
+                            const change = parseFloat(row.change || row.Change || 0);
+                            const change_percent = parseFloat(row.change_percent || row.Change_Percent || row['change%'] || 0);
+                            
+                            let direction = (row.direction || row.Direction || '').toString().toUpperCase();
+                            if (!direction || (direction !== 'UP' && direction !== 'DOWN')) {
+                                direction = change_percent >= 0 ? 'UP' : 'DOWN';
+                            }
+
+                            dataset.push({
+                                index: idx,
+                                date: date,
+                                close: close,
+                                change: change,
+                                change_percent: change_percent,
+                                direction: direction
+                            });
+                        });
+
+                        document.getElementById('rowCount').textContent = `${dataset.length.toLocaleString()} candles`;
+                        document.getElementById('dataStatusText').textContent = `Uploaded CSV Loaded (${dataset.length.toLocaleString()} candles)`;
+                        document.getElementById('dataStatusBadge').className = "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-3 py-1.5 rounded-lg flex items-center gap-2";
+                        
+                        parseAndAnalyzePattern();
+                    }
+                }
+            });
+        }
+
+        // 4. Main Pattern Parsing and Analysis Logic
+        function parseAndAnalyzePattern() {
+            const rawInput = document.getElementById('patternInput').value.trim();
+            if (!rawInput) return;
+
+            // Normalize input tokens (e.g. "up up down up" -> ["UP", "UP", "DOWN", "UP"])
+            const targetPattern = rawInput
+                .toLowerCase()
+                .replace(/,/g, ' ')
+                .split(/\s+/)
+                .map(token => token.toUpperCase())
+                .filter(token => token === 'UP' || token === 'DOWN' || token === 'FLAT');
+
+            renderPatternChips(targetPattern);
+
+            if (targetPattern.length === 0) {
+                alert('Please enter valid directions like UP or DOWN.');
+                return;
+            }
+
+            // Search Dataset for continuous matching sub-sequences
+            currentMatches = [];
+            const patternLen = targetPattern.length;
+
+            for (let i = 0; i <= dataset.length - patternLen - 1; i++) {
+                let isMatch = true;
+                for (let p = 0; p < patternLen; p++) {
+                    if (dataset[i + p].direction !== targetPattern[p]) {
+                        isMatch = false;
+                        break;
+                    }
+                }
+
+                if (isMatch) {
+                    const matchEndIdx = i + patternLen - 1;
+                    const nextCandle = dataset[matchEndIdx + 1];
+                    const nextCandle2 = dataset[matchEndIdx + 2] || null;
+                    const nextCandle3 = dataset[matchEndIdx + 3] || null;
+
+                    currentMatches.push({
+                        matchEndCandle: dataset[matchEndIdx],
+                        startIndex: i,
+                        endIndex: matchEndIdx,
+                        sequence: targetPattern,
+                        next1: nextCandle,
+                        next2: nextCandle2,
+                        next3: nextCandle3
+                    });
+                }
+            }
+
+            // Calculate Statistics and Update Dashboard
+            calculateAndRenderStats(targetPattern);
+            filterAndRenderTable();
+        }
+
+        // Render Chip badges of parsed pattern
+        function renderPatternChips(pattern) {
+            const container = document.getElementById('patternChips');
+            container.innerHTML = '';
+            pattern.forEach(dir => {
+                const chip = document.createElement('span');
+                const isUp = dir === 'UP';
+                chip.className = `px-2 py-0.5 rounded text-[11px] font-mono font-bold ${
+                    isUp ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-red-500/20 text-red-400 border border-red-500/40'
+                }`;
+                chip.textContent = dir;
+                container.appendChild(chip);
+            });
+        }
+
+        // 5. Statistical Calculation Engine
+        function calculateAndRenderStats(pattern) {
+            const totalMatches = currentMatches.length;
+            const totalCandles = dataset.length;
+
+            document.getElementById('statOccurrences').textContent = totalMatches.toLocaleString();
+            const ratio = totalCandles > 0 ? ((totalMatches / totalCandles) * 100).toFixed(1) : '0';
+            document.getElementById('statSampleRatio').textContent = `${ratio}% of dataset candles`;
+
+            if (totalMatches === 0) {
+                // Zero matches state
+                document.getElementById('statUpPercent').textContent = '0%';
+                document.getElementById('statDownPercent').textContent = '0%';
+                document.getElementById('statWinRatePercent').textContent = '0%';
+                document.getElementById('statAvgReturn').textContent = '0.00%';
+                document.getElementById('statExpectancy').textContent = '0.00%';
+                document.getElementById('statMaxGain').textContent = '+0.00%';
+                document.getElementById('statMaxLoss').textContent = '-0.00%';
+                updateProgressBar(0, 0, 0);
+                renderChart(0, 0, 0);
+                updateMultiStepForecast([], [], []);
+                return;
+            }
+
+            // Count directions for Step +1
+            let up1 = 0, down1 = 0, flat1 = 0;
+            let sumReturn1 = 0;
+            let maxGain = -Infinity;
+            let maxLoss = Infinity;
+
+            // Arrays for step +2 and +3
+            const returns1 = [];
+            const returns2 = [];
+            const returns3 = [];
+
+            currentMatches.forEach(m => {
+                // Step 1
+                const changePct1 = m.next1.change_percent;
+                sumReturn1 += changePct1;
+                returns1.push(changePct1);
+
+                if (changePct1 > maxGain) maxGain = changePct1;
+                if (changePct1 < maxLoss) maxLoss = changePct1;
+
+                if (m.next1.direction === 'UP') up1++;
+                else if (m.next1.direction === 'DOWN') down1++;
+                else flat1++;
+
+                // Step 2
+                if (m.next2) returns2.push({ dir: m.next2.direction, change: m.next2.change_percent });
+                // Step 3
+                if (m.next3) returns3.push({ dir: m.next3.direction, change: m.next3.change_percent });
+            });
+
+            const up1Pct = (up1 / totalMatches) * 100;
+            const down1Pct = (down1 / totalMatches) * 100;
+            const flat1Pct = (flat1 / totalMatches) * 100;
+            const avgReturn1 = sumReturn1 / totalMatches;
+
+            // Dashboard updates
+            document.getElementById('statUpPercent').textContent = `${up1Pct.toFixed(1)}%`;
+            document.getElementById('statDownPercent').textContent = `${down1Pct.toFixed(1)}%`;
+            
+            const dominantPct = Math.max(up1Pct, down1Pct);
+            document.getElementById('statWinRatePercent').textContent = `${dominantPct.toFixed(1)}% Dominant`;
+
+            const avgReturnElem = document.getElementById('statAvgReturn');
+            avgReturnElem.textContent = `${avgReturn1 >= 0 ? '+' : ''}${avgReturn1.toFixed(2)}%`;
+            avgReturnElem.className = `text-3xl font-extrabold my-2 font-mono ${avgReturn1 >= 0 ? 'text-brand-green' : 'text-brand-red'}`;
+
+            document.getElementById('statExpectancy').textContent = `${avgReturn1 >= 0 ? '+' : ''}${avgReturn1.toFixed(2)}%`;
+            document.getElementById('statMaxGain').textContent = `+${Math.max(0, maxGain).toFixed(2)}%`;
+            document.getElementById('statMaxLoss').textContent = `${Math.min(0, maxLoss).toFixed(2)}%`;
+
+            updateProgressBar(up1Pct, flat1Pct, down1Pct);
+            renderChart(up1, down1, flat1);
+            updateMultiStepForecast(currentMatches.map(m => ({ dir: m.next1.direction, change: m.next1.change_percent })), returns2, returns3);
+        }
+
+        // Update Directional Progress Bar
+        function updateProgressBar(up, flat, down) {
+            document.getElementById('barUp').style.width = `${up}%`;
+            document.getElementById('barFlat').style.width = `${flat}%`;
+            document.getElementById('barDown').style.width = `${down}%`;
+        }
+
+        // Render Chart.js Probability Donut Chart
+        function renderChart(up, down, flat) {
+            const ctx = document.getElementById('probabilityChart').getContext('2d');
+            
+            if (probabilityChartInstance) {
+                probabilityChartInstance.destroy();
+            }
+
+            probabilityChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['UP', 'DOWN', 'FLAT'],
+                    datasets: [{
+                        data: [up, down, flat],
+                        backgroundColor: ['#00E676', '#FF5252', '#6B7280'],
+                        borderColor: '#151921',
+                        borderWidth: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#9CA3AF',
+                                font: { size: 12, family: 'Inter' }
+                            }
+                        }
+                    },
+                    cutout: '70%'
+                }
+            });
+        }
+
+        // Multi-step sequential prediction (+1, +2, +3 steps)
+        function updateMultiStepForecast(step1Data, step2Data, step3Data) {
+            const processStep = (data) => {
+                if (!data || data.length === 0) return { dominant: 'N/A', upPct: 0, downPct: 0, avgReturn: 0 };
+                let up = 0, down = 0, sum = 0;
+                data.forEach(d => {
+                    if (d.dir === 'UP') up++;
+                    if (d.dir === 'DOWN') down++;
+                    sum += d.change;
+                });
+                const total = data.length;
+                const upPct = (up / total) * 100;
+                const downPct = (down / total) * 100;
+                const dominant = upPct >= downPct ? 'UP' : 'DOWN';
+                return { dominant, upPct, downPct, avgReturn: sum / total };
+            };
+
+            const s1 = processStep(step1Data);
+            const s2 = processStep(step2Data);
+            const s3 = processStep(step3Data);
+
+            // Step 1 UI
+            document.getElementById('step1Dominant').textContent = s1.dominant;
+            document.getElementById('step1Dominant').className = `text-2xl font-bold font-mono mb-2 ${s1.dominant === 'UP' ? 'text-brand-green' : 'text-brand-red'}`;
+            document.getElementById('step1Up').textContent = `${s1.upPct.toFixed(1)}%`;
+            document.getElementById('step1Down').textContent = `${s1.downPct.toFixed(1)}%`;
+            document.getElementById('step1Return').textContent = `${s1.avgReturn >= 0 ? '+' : ''}${s1.avgReturn.toFixed(2)}%`;
+
+            // Step 2 UI
+            document.getElementById('step2Dominant').textContent = s2.dominant;
+            document.getElementById('step2Dominant').className = `text-2xl font-bold font-mono mb-2 ${s2.dominant === 'UP' ? 'text-brand-green' : 'text-brand-red'}`;
+            document.getElementById('step2Up').textContent = `${s2.upPct.toFixed(1)}%`;
+            document.getElementById('step2Down').textContent = `${s2.downPct.toFixed(1)}%`;
+            document.getElementById('step2Return').textContent = `${s2.avgReturn >= 0 ? '+' : ''}${s2.avgReturn.toFixed(2)}%`;
+
+            // Step 3 UI
+            document.getElementById('step3Dominant').textContent = s3.dominant;
+            document.getElementById('step3Dominant').className = `text-2xl font-bold font-mono mb-2 ${s3.dominant === 'UP' ? 'text-brand-green' : 'text-brand-red'}`;
+            document.getElementById('step3Up').textContent = `${s3.upPct.toFixed(1)}%`;
+            document.getElementById('step3Down').textContent = `${s3.downPct.toFixed(1)}%`;
+            document.getElementById('step3Return').textContent = `${s3.avgReturn >= 0 ? '+' : ''}${s3.avgReturn.toFixed(2)}%`;
+        }
+
+        // 6. Table Filtering and Rendering with Pagination
+        function filterAndRenderTable() {
+            const filterVal = document.getElementById('filterDirection').value;
+            if (filterVal === 'ALL') {
+                filteredMatches = [...currentMatches];
+            } else {
+                filteredMatches = currentMatches.filter(m => m.next1.direction === filterVal);
+            }
+            currentPage = 1;
+            renderTable();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('occurrencesTableBody');
+            tbody.innerHTML = '';
+
+            const total = filteredMatches.length;
+            if (total === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="py-8 text-center text-gray-500 font-sans">
+                            <i class="fa-solid fa-folder-open text-2xl mb-2 block"></i>
+                            No matching pattern occurrences found in the current dataset.
+                        </td>
+                    </tr>`;
+                document.getElementById('paginationInfo').textContent = 'Showing 0 to 0 of 0 entries';
+                document.getElementById('prevPageBtn').disabled = true;
+                document.getElementById('nextPageBtn').disabled = true;
+                return;
+            }
+
+            const startIdx = (currentPage - 1) * pageSize;
+            const endIdx = Math.min(startIdx + pageSize, total);
+            const pageData = filteredMatches.slice(startIdx, endIdx);
+
+            pageData.forEach((match, i) => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-brand-dark/60 transition-all border-b border-brand-border/30';
+
+                const nextDir = match.next1.direction;
+                const nextChangePct = match.next1.change_percent;
+                const isUp = nextDir === 'UP';
+
+                tr.innerHTML = `
+                    <td class="py-3 px-4 text-gray-500">${startIdx + i + 1}</td>
+                    <td class="py-3 px-4 text-gray-300">${match.matchEndCandle.date}</td>
+                    <td class="py-3 px-4">
+                        <span class="text-[10px] text-gray-400 font-mono">${match.sequence.join(' ')}</span>
+                    </td>
+                    <td class="py-3 px-4 text-gray-200">$${match.matchEndCandle.close.toLocaleString()}</td>
+                    <td class="py-3 px-4">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${
+                            isUp ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                        }">${nextDir}</span>
+                    </td>
+                    <td class="py-3 px-4 font-bold ${nextChangePct >= 0 ? 'text-brand-green' : 'text-brand-red'}">
+                        ${nextChangePct >= 0 ? '+' : ''}${nextChangePct.toFixed(2)}%
+                    </td>
+                    <td class="py-3 px-4 text-gray-200">$${match.next1.close.toLocaleString()}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Pagination UI Updates
+            document.getElementById('paginationInfo').textContent = `Showing ${startIdx + 1} to ${endIdx} of ${total} entries`;
+            document.getElementById('currentPageNum').textContent = currentPage;
+            document.getElementById('prevPageBtn').disabled = currentPage === 1;
+            document.getElementById('nextPageBtn').disabled = currentPage >= Math.ceil(total / pageSize);
+        }
+    </script>
+</body>
+</html>
